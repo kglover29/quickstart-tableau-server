@@ -20,6 +20,10 @@
         "ParameterValue": "$[alfred_getaz_3]"
     },
     {
+	"ParameterKey": "CustomDBSecurityGroup",
+	"ParameterValue": ""
+    },
+    {
         "ParameterKey": "ExistingSecurityGroup",
         "ParameterValue": ""
     },
@@ -116,7 +120,47 @@
         "ParameterValue": "2"
     },
     {
-        "ParameterKey":"QSS3BucketName",
-        "ParameterValue":"$[taskcat_autobucket]"
+        "ParameterKey": "QSS3BucketName",
+        "ParameterValue": "$[taskcat_autobucket]"
+    },
+    {
+	"ParameterKey": "DBMasterUserPassword",
+	"ParameterValue": ""
+    },
+    {
+	"ParameterKey": "DBAutoMinorVersionUpgrade",
+	"ParameterValue": "true"
+    },
+    {
+	"ParameterKey": "DBAllocatedStorage",
+	"ParameterValue": "10"
+    },
+    {
+	"ParameterKey": "DBBackupRetentionPeriod",
+	"ParameterValue": "7"
+    },
+    {
+	"ParameterKey": "DBInstanceClass",
+	"ParameterValue": "db.m5.large"
+    },
+    {
+	"ParameterKey": "DBIops",
+	"ParameterValue": "1000"
+    },
+    {
+	"ParameterKey": "DBMasterUsername",
+	"ParameterValue": "postgres"
+    },
+    {
+	"ParameterKey": "DBMultiAZ",
+	"ParameterValue": "false"
+    },
+    {
+	"ParameterKey": "DBAllocatedStorageEncrypted",
+	"ParameterValue": "false"
+    },
+    {
+	"ParameterKey": "DBStorageType",
+	"ParameterValue": "General Purpose (SSD)"
     }
 ]
