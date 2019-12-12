@@ -15,6 +15,7 @@ Metadata:
           default: AWS Environment and Machine Configuration
         Parameters:
           - VpcId
+          - VpcCidr
           - PrivateSubnetIds
           - PublicSubnetIds
           - InstanceType
@@ -122,6 +123,8 @@ Metadata:
         default: Tableau Activation Key
       Username:
         default: Tableau Services Manager (TSM) administrator username
+      VpcCidr:
+        default: Taget VPC CIDR
       VpcId:
         default: Target VPC
       WorkerCount:
@@ -278,6 +281,11 @@ Parameters:
       'tableau' or 'tsmagent' or 'admin' or 'root')
     MaxLength: '30'
     Type: String
+  VpcCidr:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
+    Description: VPC CIDR of the VPC into which to deploy the cluster
+    Type: String
   VpcId:
     Description: The ID of the VPC into which to deploy the cluster
     Type: AWS::EC2::VPC::Id
@@ -341,8 +349,8 @@ Mappings:
       Code: US1604HVM
   DefaultConfiguration:
     InstallationConfig:
-      TableauServerInstallerOnCentos: https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-server.x86_64.rpm
-      TableauServerInstallerOnUbuntu: https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-server_amd64.deb
+      TableauServerInstallerOnCentos: https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-server-2019-4-0.x86_64.rpm
+      TableauServerInstallerOnUbuntu: https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-server-2019-4-0_amd64.deb
       AutomatedInstaller: https://s3-us-west-2.amazonaws.com/tableau-quickstart/automated-installer
     MachineConfiguration:
       SystemVolumeSize: 100
@@ -379,126 +387,126 @@ Conditions:
     - CentOS-7-HVM
     - !Ref 'AMIOS'
 Resources:
-  VpcInfo:
-    Type: Custom::VpcInfo
-    Properties:
-      ServiceToken: !GetAtt 'InfoLambda.Arn'
-      Region: !Ref 'AWS::Region'
-      Func: DescribeVpc
-      VpcId: !Ref 'VpcId'
-  InfoLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      Code:
-        ZipFile: |
-            var aws = require('aws-sdk');
-
-            exports.handler = (e, c) => {
-            	console.log('REQUEST RECEIVED:\n' + JSON.stringify(e));
-
-            	// For Delete requests, immediately send a SUCCESS response.
-            	if (e.RequestType == 'Delete') {
-            		sendResponse(e, c, 'SUCCESS');
-            		return;
-            	}
-
-            	var ec2 = new aws.EC2({ region: e.ResourceProperties.Region });
-            	var vpc = e.ResourceProperties.VpcId;
-            	var func = e.ResourceProperties.Func;
-
-            	var status = 'FAILED';
-            	var responseData = {};
-            	if (func === 'DescribeVpc') {
-            		// Get VPCs with the specified id
-            		ec2.describeVpcs({ VpcIds: [vpc] }, (err, data) => {
-            			console.log('vpcs:\n' + JSON.stringify(data));
-            			err = err || (data.Vpcs.length !== 1 ? 'DescribeVpcs returned ' + data.Vpcs.length + ' results.' : undefined);
-            			if (err) {
-            				responseData.Error = 'DescribeVpcs call failed';
-            				console.log(responseData.Error + ':\n', err);
-            			} else {
-            				status = 'SUCCESS';
-            				responseData = data.Vpcs[0];
-            			}
-            			sendResponse(e, c, status, responseData);
-            		});
-            	} else {
-            		sendResponse(e, c, status, {Error: 'Unknown Function ' + func});
-            	}
-            };
-
-            // Send response to the pre-signed S3 URL
-            function sendResponse(e, c, status, responseData) {
-            	var responseBody = JSON.stringify({
-            		Status: status,
-            		Reason: 'See the details in CloudWatch Log Stream: ' + c.logStreamName,
-            		PhysicalResourceId: c.logStreamName,
-            		StackId: e.StackId,
-            		RequestId: e.RequestId,
-            		LogicalResourceId: e.LogicalResourceId,
-            		Data: responseData
-            	});
-
-            	console.log('RESPONSE BODY:\n', responseBody);
-
-            	var https = require('https');
-            	var url = require('url');
-
-            	var parsedUrl = url.parse(e.ResponseURL);
-            	var options = {
-            		hostname: parsedUrl.hostname,
-            		port: 443,
-            		path: parsedUrl.path,
-            		method: 'PUT',
-            		headers: {
-            			'content-type': '',
-            			'content-length': responseBody.length
-            		}
-            	};
-
-            	console.log('SENDING RESPONSE...\n');
-
-            	var request = https.request(options, (response) => {
-            		console.log('STATUS: ' + response.statusCode);
-            		console.log('HEADERS: ' + JSON.stringify(response.headers));
-            		c.done(); // Tell AWS Lambda function execution is done
-            	});
-
-            	request.on('error', (err) => {
-            		console.log('sendResponse Error:' + err);
-            		c.done(); // Tell AWS Lambda function execution is done
-            	});
-
-            	// write data to request body
-            	request.write(responseBody);
-            	request.end();
-      Handler: index.handler
-      Role: !GetAtt 'LambdaExecutionRole.Arn'
-      Runtime: nodejs8.10
-      Timeout: 30
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Path: /
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: ec2:DescribeVpcs
-                Resource: '*'
+#  VpcInfo:
+#    Type: Custom::VpcInfo
+#    Properties:
+#      ServiceToken: !GetAtt 'InfoLambda.Arn'
+#      Region: !Ref 'AWS::Region'
+#      Func: DescribeVpc
+#      VpcId: !Ref 'VpcId'
+#  InfoLambda:
+#    Type: AWS::Lambda::Function
+#    Properties:
+#      Code:
+#        ZipFile: |
+#            var aws = require('aws-sdk');
+#
+#            exports.handler = (e, c) => {
+#            	console.log('REQUEST RECEIVED:\n' + JSON.stringify(e));
+#
+#            	// For Delete requests, immediately send a SUCCESS response.
+#            	if (e.RequestType == 'Delete') {
+#            		sendResponse(e, c, 'SUCCESS');
+#            		return;
+#            	}
+#
+#            	var ec2 = new aws.EC2({ region: e.ResourceProperties.Region });
+#            	var vpc = e.ResourceProperties.VpcId;
+#            	var func = e.ResourceProperties.Func;
+#
+#            	var status = 'FAILED';
+#            	var responseData = {};
+#            	if (func === 'DescribeVpc') {
+#            		// Get VPCs with the specified id
+#            		ec2.describeVpcs({ VpcIds: [vpc] }, (err, data) => {
+#            			console.log('vpcs:\n' + JSON.stringify(data));
+#            			err = err || (data.Vpcs.length !== 1 ? 'DescribeVpcs returned ' + data.Vpcs.length + ' results.' : undefined);
+#            			if (err) {
+#            				responseData.Error = 'DescribeVpcs call failed';
+#            				console.log(responseData.Error + ':\n', err);
+#            			} else {
+#            				status = 'SUCCESS';
+#            				responseData = data.Vpcs[0];
+#            			}
+#            			sendResponse(e, c, status, responseData);
+#            		});
+#            	} else {
+#            		sendResponse(e, c, status, {Error: 'Unknown Function ' + func});
+#            	}
+#            };
+#
+#            // Send response to the pre-signed S3 URL
+#            function sendResponse(e, c, status, responseData) {
+#            	var responseBody = JSON.stringify({
+#            		Status: status,
+#            		Reason: 'See the details in CloudWatch Log Stream: ' + c.logStreamName,
+#            		PhysicalResourceId: c.logStreamName,
+#            		StackId: e.StackId,
+#            		RequestId: e.RequestId,
+#            		LogicalResourceId: e.LogicalResourceId,
+#            		Data: responseData
+#            	});
+#
+#            	console.log('RESPONSE BODY:\n', responseBody);
+#
+#            	var https = require('https');
+#            	var url = require('url');
+#
+#            	var parsedUrl = url.parse(e.ResponseURL);
+#            	var options = {
+#            		hostname: parsedUrl.hostname,
+#            		port: 443,
+#            		path: parsedUrl.path,
+#            		method: 'PUT',
+#            		headers: {
+#            			'content-type': '',
+#            			'content-length': responseBody.length
+#            		}
+#            	};
+#
+#            	console.log('SENDING RESPONSE...\n');
+#
+#            	var request = https.request(options, (response) => {
+#            		console.log('STATUS: ' + response.statusCode);
+#            		console.log('HEADERS: ' + JSON.stringify(response.headers));
+#            		c.done(); // Tell AWS Lambda function execution is done
+#            	});
+#
+#            	request.on('error', (err) => {
+#            		console.log('sendResponse Error:' + err);
+#            		c.done(); // Tell AWS Lambda function execution is done
+#            	});
+#
+#            	// write data to request body
+#            	request.write(responseBody);
+#            	request.end();
+#      Handler: index.handler
+#      Role: !GetAtt 'LambdaExecutionRole.Arn'
+#      Runtime: nodejs8.10
+#      Timeout: 30
+#  LambdaExecutionRole:
+#    Type: AWS::IAM::Role
+#    Properties:
+#      AssumeRolePolicyDocument:
+#        Version: '2012-10-17'
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service:
+#                - lambda.amazonaws.com
+#            Action:
+#              - sts:AssumeRole
+#      ManagedPolicyArns:
+#        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+#      Path: /
+#      Policies:
+#        - PolicyName: root
+#          PolicyDocument:
+#            Version: '2012-10-17'
+#            Statement:
+#              - Effect: Allow
+#                Action: ec2:DescribeVpcs
+#                Resource: '*'
   RootRole:
     Type: AWS::IAM::Role
     Properties:
@@ -561,7 +569,7 @@ Resources:
     Properties:
       Count: !Ref 'WorkerCount'
       Handle: !Ref 'WorkerWaitHandle'
-      Timeout: '1200'
+      Timeout: '2100'
   TopologyWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
     Condition: HasWorkers
@@ -881,7 +889,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: '0'
           ToPort: '65535'
-          CidrIp: !GetAtt 'VpcInfo.CidrBlock'
+          CidrIp: !Ref VpcCidr
+          # CidrIp: !GetAtt 'VpcInfo.CidrBlock'
   WorkerGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -1023,6 +1032,7 @@ Resources:
             rm -f /tmp/secrets.properties
             rm -f /tmp/tableau-server*
             rm -f /tmp/automated-installer
+# TODO: INSERT RDS HERE #
 Outputs:
   LoadBalancerDNSName:
     Description: Direct DNS name of load balancer
