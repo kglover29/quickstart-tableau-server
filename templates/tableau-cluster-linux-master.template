@@ -153,8 +153,17 @@ Parameters:
       - m4.10xlarge
       - m5.4xlarge
       - m5.12xlarge
+      - c5.4xlarge
+      - c5d.4xlarge
+      - c5.9xlarge
+      - c5d.9xlarge
+      - r5.4xlarge
+      - r5.8xlarge
+      - r5.16xlarge
+      - z1d.2xlarge
+      - z1d.6xlarge
     ConstraintDescription: must be a valid EC2 instance type.
-    Default: m4.4xlarge
+    Default: m5.4xlarge
     Description: Amazon EC2 instance type
     Type: String
   KeyPairName:
