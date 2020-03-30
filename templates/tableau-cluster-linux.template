@@ -614,23 +614,6 @@ Resources:
           - !Ref 'PublicSubnetIds'
       SecurityGroups:
         - !Ref 'LoadBalancerSecurityGroup'
-#       Listeners:
-#         - Protocol: !If
-#             - HasSSLCertificate
-#             - HTTPS
-#             - HTTP
-#           LoadBalancerPort: !If
-#             - HasSSLCertificate
-#             - '443'
-#             - '80'
-#           InstanceProtocol: HTTP
-#           InstancePort: '80'
-#           SSLCertificateId: !If
-#             - HasSSLCertificate
-#             - !Ref 'SSLCertificateARN'
-#             - !Ref 'AWS::NoValue'
-#       Instances:
-#         - !Ref 'PrimaryServer'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-cfn-lb'
@@ -646,13 +629,6 @@ Resources:
       DefaultActions:
        - Type: "forward"
          TargetGroupArn: !Ref 'ServerTargetGroup'
-#          RedirectConfig:
-#            Protocol: "HTTPS"
-#            Port: "443"
-#            Host: "#{host}"
-#            Path: "/#{path}"
-#            Query: "#{query}"
-#            StatusCode: "HTTP_301"
       LoadBalancerArn: !Ref ServerLoadBalancer
       Port: !If
         - HasSSLCertificate
@@ -680,12 +656,6 @@ Resources:
         - Id: !Ref 'PrimaryServer'
       TargetType: instance
       VpcId: !Ref 'VpcId'
-#   LoadBalancerCertificate:
-#     Type: AWS::ElasticLoadBalancingV2::ListenerCertificate
-#     Condition: HasSSLCertificate
-#     Properties:
-#       Certificates: !Ref 'SSLCertificateARN'
-#       ListenerArn: !Ref 'HTTPListener'
   DNSNameEntry:
     Type: AWS::Route53::RecordSet
     Condition: CreateDNSEntry
@@ -992,8 +962,6 @@ Resources:
       LaunchConfigurationName: !Ref 'WorkerLaunchConfig'
       MinSize: !Ref 'WorkerCount'
       MaxSize: !Ref 'WorkerCount'
-#       LoadBalancerNames:
-#         - !Ref 'ServerLoadBalancer'
       TargetGroupARNs:
         - !Ref 'ServerTargetGroup'
   WorkerLaunchConfig:
